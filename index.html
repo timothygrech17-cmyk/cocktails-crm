@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#231a33">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cocktails CRM">
+<title>Signature Cocktails CRM</title>
+<!--
+  SIGNATURE COCKTAILS — PITCH CRM (MVP)
+  ------------------------------------------------------------------
+  One file. No build step, no server, no accounts, no paid services.
+  All data lives in this browser's localStorage under the key below.
+  Back up regularly from  More → Data  (JSON backup + CSV export).
+
+  File map (search for these banners):
+    CONFIG ............ stages, types, offers, default rates & targets
+    STORAGE ........... load / save / sample data
+    RULES ............. stage transition rules + side effects
+    METRICS ........... dashboard numbers
+    VIEWS ............. Home, Week, Pipeline, Accounts, More
+    FORMS / MODALS .... pitch, account, post-event
+    CSV / BACKUP / ICS  import-export helpers
+-->
+<style>
+  /* ============ THEME — change colours here ============ */
+  :root{
+    --bg:#f5f1ea; --card:#ffffff; --ink:#231a33; --muted:#6c6478; --line:#e5dfd5;
+    --accent:#d9480f;      /* blood-orange: primary actions */
+    --accent-soft:#fde8dc;
+    --lime:#5c8a12;        /* success */
+    --amber:#b7791f; --red:#c53030; --plum:#4a3566;
+    --radius:14px; --shadow:0 1px 2px rgba(35,26,51,.06),0 4px 14px rgba(35,26,51,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#16121d; --card:#211b2b; --ink:#f2edf7; --muted:#a79fb4; --line:#352d42;
+      --accent:#ff7a3d; --accent-soft:#3a2418; --lime:#9ccc4a; --amber:#f0b44c; --red:#f07070; --plum:#b9a2dd;
+      --shadow:none; }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif}
+  body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  h1,h2,h3{margin:0 0 8px;line-height:1.2} h2{font-size:17px} h3{font-size:15px}
+  a{color:var(--accent)}
+  .muted{color:var(--muted)} .small{font-size:13px}
+
+  /* Header */
+  .top{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:#231a33;color:#fff}
+  .brand{font-weight:800;letter-spacing:.2px;font-size:16px}
+  .brand span{color:#ff9a5c;font-weight:600;margin-left:4px}
+  main{max-width:1100px;margin:0 auto;padding:14px 16px}
+
+  /* Cards & layout */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .grid{display:grid;gap:10px}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  @media(min-width:760px){.kpis{grid-template-columns:repeat(4,1fr)} .two{grid-template-columns:1fr 1fr}}
+  .kpi .v{font-size:24px;font-weight:800;margin:2px 0}
+  .kpi .l{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .between{justify-content:space-between}
+  .item{padding:10px 0;border-top:1px solid var(--line)} .item:first-of-type{border-top:0}
+
+  /* Pills / tags */
+  .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:var(--line);color:var(--ink);white-space:nowrap}
+  .pill.ok{background:#e3f1cf;color:#3d5f08} .pill.warn{background:#fdecc8;color:#7a4d06} .pill.bad{background:#fbd5d5;color:#8a1f1f}
+  @media (prefers-color-scheme: dark){.pill.ok{background:#2b3b17;color:#c4e88c}.pill.warn{background:#3d2e10;color:#f5cd7a}.pill.bad{background:#3f1a1a;color:#f5a3a3}}
+  .tag{font-size:11px;padding:2px 7px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-weight:600;white-space:nowrap}
+  .stage{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:700;color:#fff;background:var(--plum);white-space:nowrap}
+  .s-identified{background:#8a8296}.s-researched{background:#6b5b95}.s-pitched{background:#2b6cb0}.s-followup{background:#2c7a7b}
+  .s-negotiating{background:#b7791f}.s-booked{background:#d9480f}.s-completed{background:#5c8a12}.s-testimonial{background:#276749}.s-lost{background:#9b2c2c}
+
+  /* Buttons & inputs */
+  .btn{appearance:none;border:0;border-radius:10px;padding:10px 14px;font:inherit;font-weight:700;background:var(--accent);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn.danger{background:transparent;color:var(--red);border:1px solid var(--red)}
+  .btn.sm,.mini{padding:6px 10px;font-size:13px}
+  .mini{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  input,select,textarea{width:100%;font:inherit;font-size:16px;/*16px stops iOS zoom*/ padding:9px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  textarea{min-height:76px;resize:vertical}
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:10px 0 4px}
+  .fields{display:grid;gap:0 10px;grid-template-columns:1fr 1fr}
+  .fields .full{grid-column:1/-1}
+  .filters{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+  .filters .full{grid-column:1/-1}
+  @media(min-width:760px){.filters{grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr}.filters .full{grid-column:auto}}
+
+  /* Pipeline board */
+  .board{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+  .col{flex:0 0 78%;max-width:280px;scroll-snap-align:start;background:rgba(0,0,0,.03);border-radius:var(--radius);padding:8px}
+  @media(min-width:760px){.col{flex-basis:230px}}
+  .col h3{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:4px 4px 8px}
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px;margin-bottom:8px;cursor:pointer;box-shadow:var(--shadow)}
+  .pcard b{font-size:14px} .pc-meta{font-size:12px;color:var(--muted);margin-top:3px}
+  .pcard .mini{margin-top:8px}
+
+  /* Target bars */
+  .mrow{display:grid;grid-template-columns:62px 1fr 54px;gap:8px;align-items:center;margin:6px 0;font-size:13px}
+  .bar{height:12px;border-radius:6px;background:var(--line);position:relative;overflow:hidden}
+  .bar i{position:absolute;top:0;bottom:0;left:0;border-radius:6px}
+  .bar .done{background:var(--lime)} .bar .booked{background:var(--accent);opacity:.55}
+  .mrow.now{font-weight:800}
+
+  /* Bottom tab bar */
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(5,1fr);
+    background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav.tabs button{border:0;background:none;color:var(--muted);font:inherit;font-size:12px;font-weight:600;padding:9px 0 10px;cursor:pointer}
+  nav.tabs button .ic{display:block;font-size:19px;line-height:1.1}
+  nav.tabs button.on{color:var(--accent)}
+  .fab{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:7;border-radius:999px;padding:13px 18px;box-shadow:0 6px 18px rgba(217,72,15,.35)}
+
+  /* Modal (native <dialog>) */
+  dialog{border:0;border-radius:18px 18px 0 0;padding:0;width:100%;max-width:620px;max-height:92vh;margin:auto auto 0;background:var(--card);color:var(--ink)}
+  @media(min-width:760px){dialog{border-radius:18px;margin:auto}}
+  dialog::backdrop{background:rgba(20,14,28,.55)}
+  .mbody{padding:18px 16px calc(18px + env(safe-area-inset-bottom));overflow-y:auto;max-height:92vh}
+  .mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .x{border:0;background:var(--line);color:var(--ink);border-radius:999px;width:32px;height:32px;font-size:18px;cursor:pointer;flex:none}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+  dl.info{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;margin:8px 0;font-size:14px}
+  dl.info dt{color:var(--muted)} dl.info dd{margin:0;word-break:break-word}
+
+  /* Rate card table */
+  .rt{width:100%;border-collapse:collapse;font-size:14px}
+  .rt td,.rt th{padding:4px;text-align:left;vertical-align:top}
+  .rt input,.rt select{padding:7px;font-size:15px}
+  .rt .n{width:78px}
+
+  #toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;
+    background:#231a33;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
+  #toast.show{opacity:1}
+  .empty{padding:18px;text-align:center;color:var(--muted);font-size:14px}
+  .banner{border-left:4px solid var(--accent)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">Signature<span>Cocktails CRM</span></div>
+  <div id="topStatus"></div>
+</header>
+
+<main id="app"></main>
+
+<button class="btn fab" onclick="openPitch()">+ Pitch</button>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="home"><span class="ic">◎</span>Home</button>
+  <button data-tab="week"><span class="ic">✦</span>Week</button>
+  <button data-tab="pipeline"><span class="ic">▤</span>Pipeline</button>
+  <button data-tab="accounts"><span class="ic">☰</span>Accounts</button>
+  <button data-tab="more"><span class="ic">⋯</span>More</button>
+</nav>
+
+<dialog id="modal"><div class="mbody" id="modalBody"></div></dialog>
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   CONFIG — edit these lists to change dropdowns, stages and defaults
+   ===================================================================== */
+
+// Pipeline stages, in order. `hint` shows in the pitch form.
+const STAGES = [
+  { id:'identified',  label:'Identified',     hint:'Lead spotted — worth contacting.' },
+  { id:'researched',  label:'Researched',     hint:'You know who to contact and what to offer. Ready for a Tuesday pitch.' },
+  { id:'pitched',     label:'Pitched',        hint:'Pitch sent. Sets pitch date + a follow-up date automatically.' },
+  { id:'followup',    label:'Follow-up',      hint:'Chased at least once, waiting for a reply.' },
+  { id:'negotiating', label:'Negotiating',    hint:'Talking dates, headcount, price.' },
+  { id:'booked',      label:'Booked',         hint:'Date + price agreed. Needs event date and quoted price.' },
+  { id:'completed',   label:'Completed',      hint:'Event done. Triggers the testimonial + photo checklist.' },
+  { id:'testimonial', label:'Testimonial ✓',  hint:'Testimonial received — job fully closed.' },
+  { id:'lost',        label:'Lost',           hint:'Said no or went cold. Log a reason so you learn from it.' },
+];
+const SIDX = Object.fromEntries(STAGES.map((s, i) => [s.id, i]));
+const stageLabel = id => (STAGES[SIDX[id]] || {}).label || id;
+const PIPE_STAGES = ['pitched', 'followup', 'negotiating'];      // counted in "pipeline value"
+const WON_STAGES  = ['booked', 'completed', 'testimonial'];      // counted as a won event
+
+const TYPES   = ['Corporate', 'Hotel', 'Villa', 'Wedding planner', 'Venue', 'Private client'];
+const OFFERS  = { bar:'Bar + bartender', masterclass:'Cocktail masterclass', host:'Host + bar combo' };
+const SOURCES = ['Instagram', 'LinkedIn', 'Facebook', 'Referral', 'Radio', 'Walk-in', 'Email', 'Website', 'Event / networking', 'Other'];
+const AREAS   = ['Valletta','Floriana','Sliema','St Julian\'s','Gżira','Msida','Ta\' Xbiex','Swieqi','Pembroke','St Paul\'s Bay','Buġibba','Qawra',
+                 'Mellieħa','Mosta','Naxxar','Attard','Balzan','Lija','Mdina','Rabat','Birgu','Marsaxlokk','Marsascala','Birżebbuġa','Gozo','Comino'];
+const POST_STATUS = { 'to-request':'To request', requested:'Requested', received:'Received', declined:'Declined' };
+
+// Draft rate card (editable in More → Rate card). `unit` decides how price is suggested.
+// Masterclass, host and add-on figures are PLACEHOLDERS until competitor checks are done.
+const DEFAULT_RATES = [
+  { id:'bar',         name:'Bar + bartender (4 hrs)',       unit:'per event', low:200, high:300, notes:'Client supplies alcohol. Draft.' },
+  { id:'masterclass', name:'Cocktail masterclass (8–20)',   unit:'per head',  low:35,  high:50,  notes:'Placeholder — check competitors.' },
+  { id:'host',        name:'Host + bar combo (4 hrs)',      unit:'per event', low:350, high:450, notes:'Placeholder — priced above bar-only.' },
+  { id:'ice',         name:'Add-on: ice',                   unit:'per event', low:20,  high:35,  notes:'Placeholder.' },
+  { id:'garnish',     name:'Add-on: mixers & garnishes',    unit:'per head',  low:3,   high:5,   notes:'Placeholder.' },
+];
+
+// Monthly event targets (YYYY-MM → events). From the goals:
+// first paid event by Dec 2026 · 2/month by Mar 2027 · 3/month through summer 2027.
+const DEFAULT_TARGETS = {
+  '2026-11':0, '2026-12':1, '2027-01':1, '2027-02':1, '2027-03':2, '2027-04':2,
+  '2027-05':2, '2027-06':3, '2027-07':3, '2027-08':3, '2027-09':3,
+};
+
+const STORAGE_KEY = 'sigcocktails_crm_v1';
+
+/* =====================================================================
+   HELPERS — dates are stored as 'YYYY-MM-DD' strings (local time)
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseISO = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const today = () => iso(new Date());
+const addDays = (s, n) => { const d = parseISO(s); d.setDate(d.getDate() + n); return iso(d); };
+const weekStart = (s = today()) => { const d = parseISO(s); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return iso(d); }; // Monday
+const daysBetween = (a, b) => Math.round((parseISO(b) - parseISO(a)) / 864e5);
+const fmtDate  = s => s ? parseISO(s).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' }) : '—';
+const fmtShort = s => s ? parseISO(s).toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : '—';
+const monthLabel = k => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month:'short', year:'2-digit' }); };
+const EUR = new Intl.NumberFormat('en-IE', { style:'currency', currency:'EUR', maximumFractionDigits:0 });
+const money = n => EUR.format(+n || 0);
+const esc = s => s == null ? '' : String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
+const opts = (list, sel) => list.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+const optsKV = (obj, sel) => Object.entries(obj).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* =====================================================================
+   STORAGE — everything lives in one object `db` saved to localStorage
+   ===================================================================== */
+function freshDb(withSample) {
+  const d = {
+    version: 1,
+    accounts: [], pitches: [],
+    rateCard: JSON.parse(JSON.stringify(DEFAULT_RATES)),
+    targets: { ...DEFAULT_TARGETS },
+    settings: { followUpDays: 5, lastBackup: null },
+  };
+  if (withSample) Object.assign(d, sampleData());
+  return d;
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      // Fill in anything missing from older saves (safe "migration")
+      const base = freshDb(false);
+      return { ...base, ...d, settings: { ...base.settings, ...(d.settings || {}) } };
+    }
+  } catch (e) { console.warn('Load failed', e); }
+  return freshDb(true); // first run → show sample data
+}
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+  catch (e) { toast('⚠ Could not save — storage blocked or full. Export a backup!'); }
+}
+
+// Five fictional prospects across types, at different stages, to demo the flow.
+function sampleData() {
+  const t = today();
+  const tue = addDays(weekStart(t), 1);
+  const lastPitch = tue <= t ? tue : addDays(tue, -7);  // most recent Tuesday
+  const A = o => ({ id:uid(), area:'', contact:'', role:'', email:'', phone:'', source:'', notes:'', createdAt:t, sample:true, ...o });
+  const P = o => ({ id:uid(), guests:'', quotedPrice:'', pitchDate:'', followUpDate:'', eventDate:'', notes:'', lostReason:'', post:null, createdAt:t, updatedAt:t, sample:true, ...o });
+  const H = (...pairs) => pairs.map(([stage, d]) => ({ stage, date: addDays(t, d) }));
+
+  const a1 = A({ name:'Harbourline Gaming Ltd', type:'Corporate', area:'St Julian\'s', contact:'Sarah Vella', role:'HR & People Lead',
+    email:'sarah.vella@example.com', phone:'+356 9900 0001', source:'LinkedIn',
+    notes:'~60 staff. Wants a team-building activity in December, separate from the main Christmas party.' });
+  const a2 = A({ name:'The Bastion Boutique Hotel', type:'Hotel', area:'Valletta', contact:'Mark Borg', role:'Events Manager',
+    email:'events@example.com', phone:'+356 9900 0002', source:'Walk-in',
+    notes:'Rooftop terrace, 40 pax max. Runs monthly guest socials — host combo fits.' });
+  const a3 = A({ name:'Villa Saliba Retreat', type:'Villa', area:'Mellieħa', contact:'Anna Saliba', role:'Owner',
+    email:'anna@example.com', phone:'+356 9900 0003', source:'Instagram',
+    notes:'Rents to groups (hen dos, birthdays). Could recommend us to every booking.' });
+  const a4 = A({ name:'Ivory & Sea Weddings', type:'Wedding planner', area:'Gozo', contact:'Daniel Farrugia', role:'Lead planner',
+    email:'daniel@example.com', phone:'+356 9900 0004', source:'Referral',
+    notes:'Plans 25–30 weddings/yr. Books summer 2027 suppliers from January.' });
+  const a5 = A({ name:'Camilleri 40th birthday', type:'Private client', area:'Naxxar', contact:'Maria Camilleri', role:'Client',
+    email:'maria@example.com', phone:'+356 9900 0005', source:'Radio',
+    notes:'Heard about it on the show. Garden party, ~35 guests.' });
+
+  const pitches = [
+    P({ accountId:a1.id, offer:'masterclass', guests:16, quotedPrice:720, stage:'negotiating',
+        pitchDate:addDays(t,-15), followUpDate:addDays(t,2), eventDate:addDays(t,50),
+        notes:'Masterclass for the 16-person ops team. Asked for two December date options.',
+        history:H(['identified',-20],['researched',-18],['pitched',-15],['followup',-9],['negotiating',-4]) }),
+    P({ accountId:a2.id, offer:'host', quotedPrice:400, stage:'pitched',
+        pitchDate:lastPitch, followUpDate:addDays(lastPitch,5),
+        notes:'Pitched host + bar combo for their monthly rooftop guest social.',
+        history:[{stage:'identified',date:addDays(t,-10)},{stage:'researched',date:addDays(t,-6)},{stage:'pitched',date:lastPitch}] }),
+    P({ accountId:a3.id, offer:'bar', quotedPrice:220, stage:'completed',
+        pitchDate:addDays(t,-40), eventDate:addDays(t,-12),
+        notes:'Birthday weekend for a villa guest group. Went well — owner wants to refer us.',
+        post:{ testimonial:'requested', photos:'to-request', requestedAt:addDays(t,-10), quote:'', photoLink:'' },
+        history:H(['identified',-45],['pitched',-40],['negotiating',-30],['booked',-28],['completed',-12]) }),
+    P({ accountId:a4.id, offer:'host', stage:'researched',
+        notes:'Pitch angle: host + bar for welcome drinks / cocktail hour. Ask about their 2027 supplier list.',
+        history:H(['identified',-7],['researched',-3]) }),
+    P({ accountId:a5.id, offer:'bar', quotedPrice:260, stage:'booked',
+        pitchDate:addDays(t,-12), eventDate:addDays(t,36),
+        notes:'Client supplies spirits + wine. Ice and garnish pack quoted separately.',
+        history:H(['identified',-14],['pitched',-12],['negotiating',-8],['booked',-5]) }),
+  ];
+  return { accounts:[a1,a2,a3,a4,a5], pitches };
+}
+
+let db = load();
+// UI state (not saved)
+const ui = { tab:'home', view:'board', f:{ q:'', type:'', stage:'', offer:'', dateField:'eventDate', from:'', to:'' }, acctQ:'', acctType:'' };
+
+/* =====================================================================
+   RULES — what stage moves are allowed, and what happens on each move
+   ===================================================================== */
+function canMove(p, to) {
+  const from = p.stage;
+  if (from === to) return { ok:true };
+  if (to === 'lost') {
+    return ['completed','testimonial'].includes(from) ? { ok:false, reason:'A completed job can’t be marked Lost.' } : { ok:true };
+  }
+  if (from === 'lost' && !['identified','researched'].includes(to))
+    return { ok:false, reason:'Reopen a lost pitch at Identified or Researched first.' };
+  if (['completed','testimonial'].includes(from) && SIDX[to] < SIDX[from])
+    return { ok:false, reason:'Completed jobs can’t move backwards. Create a new pitch for a repeat booking.' };
+  if (to === 'booked' && (!p.eventDate || !(+p.quotedPrice > 0)))
+    return { ok:false, reason:'To book, add the event date and quoted price.' };
+  if (to === 'completed' && from !== 'booked')
+    return { ok:false, reason:'Only a Booked event can be marked Completed.' };
+  if (to === 'testimonial' && from !== 'completed')
+    return { ok:false, reason:'Mark the event Completed before logging the testimonial.' };
+  return { ok:true };
+}
+
+// Side effects of entering a stage. Always call canMove first.
+function applyStage(p, to) {
+  if (p.stage === to) return;
+  p.stage = to;
+  p.history = p.history || [];
+  p.history.push({ stage:to, date:today() });
+  if (to === 'pitched') {
+    p.pitchDate = p.pitchDate || today();
+    p.followUpDate = p.followUpDate || addDays(p.pitchDate, +db.settings.followUpDays || 5);
+  }
+  if (to === 'followup') p.followUpDate = addDays(today(), +db.settings.followUpDays || 5);
+  if (to === 'completed') p.post = { testimonial:'to-request', photos:'to-request', quote:'', photoLink:'', ...(p.post || {}) };
+  if (to === 'testimonial') { p.post = p.post || {}; p.post.testimonial = 'received'; }
+  p.updatedAt = today();
+}
+
+function nextStage(p) {
+  if (['testimonial','lost'].includes(p.stage)) return null;
+  return STAGES[SIDX[p.stage] + 1].id;
+}
+
+// One-tap "→ next stage" button on cards
+function advance(id) {
+  const p = getPitch(id), to = nextStage(p);
+  if (!to) return;
+  const chk = canMove(p, to);
+  if (!chk.ok) { toast(chk.reason); openPitch(id); return; }
+  applyStage(p, to); save(); render();
+  toast(`${acctName(p)} → ${stageLabel(to)}`);
+  if (to === 'completed') openPost(id);
+}
+
+/* =====================================================================
+   LOOKUPS & METRICS
+   ===================================================================== */
+const getAcct  = id => db.accounts.find(a => a.id === id);
+const getPitch = id => db.pitches.find(p => p.id === id);
+const acctName = p => (getAcct(p.accountId) || {}).name || '(no account)';
+const rate = id => db.rateCard.find(r => r.id === id);
+
+// Suggested price from the rate-card midpoint (per-head × guests, default 12 guests)
+function suggestedPrice(offer, guests) {
+  const r = rate(offer); if (!r) return 0;
+  const mid = Math.round(((+r.low || 0) + (+r.high || 0)) / 2);
+  return r.unit === 'per head' ? mid * (+guests || 12) : mid;
+}
+const pitchValue = p => +p.quotedPrice || suggestedPrice(p.offer, p.guests);
+const everPitched = p => !!p.pitchDate || (SIDX[p.stage] >= SIDX.pitched && p.stage !== 'lost') ||
+                         (p.history || []).some(h => PIPE_STAGES.concat(WON_STAGES).includes(h.stage));
+
+function postOpen(p) {   // after-event tasks still outstanding?
+  if (!['completed','testimonial'].includes(p.stage) || !p.post) return false;
+  const done = s => ['received','declined'].includes(s);
+  return !done(p.post.testimonial) || !done(p.post.photos);
+}
+
+function weekInfo() {
+  const ws = weekStart(), we = addDays(ws, 6), tue = addDays(ws, 1), t = today();
+  const pitchedThisWeek = db.pitches.filter(p => p.pitchDate && p.pitchDate >= ws && p.pitchDate <= we);
+  let status, cls;
+  if (pitchedThisWeek.length) { status = 'Tuesday pitch done ✓'; cls = 'ok'; }
+  else if (t < tue)  { status = 'Pitch due Tue ' + fmtShort(tue); cls = ''; }
+  else if (t === tue){ status = 'Pitch due today'; cls = 'warn'; }
+  else               { status = 'Pitch overdue'; cls = 'bad'; }
+  return { ws, we, tue, pitchedThisWeek, status, cls };
+}
+
+function stats() {
+  const P = db.pitches;
+  const won = P.filter(p => WON_STAGES.includes(p.stage));
+  const pitched = P.filter(everPitched);
+  const pipe = P.filter(p => PIPE_STAGES.includes(p.stage));
+  const byMonth = {}; // month → {booked, done}
+  won.forEach(p => {
+    if (!p.eventDate) return;
+    const k = p.eventDate.slice(0, 7);
+    byMonth[k] = byMonth[k] || { booked:0, done:0 };
+    if (p.stage === 'booked') byMonth[k].booked++; else byMonth[k].done++;
+  });
+  return {
+    won, pitched, pipe, byMonth,
+    conversion: pitched.length ? Math.round(won.length / pitched.length * 100) : 0,
+    revenue: won.reduce((s, p) => s + (+p.quotedPrice || 0), 0),
+    pipeline: pipe.reduce((s, p) => s + pitchValue(p), 0),
+  };
+}
+
+/* =====================================================================
+   VIEWS
+   ===================================================================== */
+function render() {
+  const w = weekInfo();
+  $('#topStatus').innerHTML = `<span class="pill ${w.cls}">${w.status}</span>`;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === ui.tab));
+  $('#app').innerHTML = VIEWS[ui.tab]();
+  if (ui.tab === 'pipeline') renderPipelineResults();
+  if (ui.tab === 'accounts') renderAccountResults();
+}
+
+const VIEWS = {
+
+  /* ---------- HOME / DASHBOARD ---------- */
+  home() {
+    const s = stats(), w = weekInfo(), t = today();
+    const curMonth = t.slice(0, 7);
+    const months = Object.keys(db.targets).sort();
+    const bars = months.map(k => {
+      const m = s.byMonth[k] || { booked:0, done:0 }, tgt = +db.targets[k] || 0;
+      const scale = Math.max(tgt, m.booked + m.done, 1);
+      const met = (m.booked + m.done) >= tgt && tgt > 0;
+      return `<div class="mrow ${k === curMonth ? 'now' : ''}">
+        <span>${monthLabel(k)}</span>
+        <div class="bar"><i class="booked" style="width:${(m.done + m.booked) / scale * 100}%"></i><i class="done" style="width:${m.done / scale * 100}%"></i></div>
+        <span>${m.done + m.booked}/${tgt}${met ? ' ✓' : ''}</span></div>`;
+    }).join('');
+
+    // Milestones from the business goals
+    const wonIn = (from, to) => s.won.filter(p => p.eventDate && p.eventDate >= from && p.eventDate <= to && +p.quotedPrice > 0).length;
+    const mCount = k => { const m = s.byMonth[k] || { booked:0, done:0 }; return m.booked + m.done; };
+    const summerOk = ['2027-06','2027-07','2027-08'].every(k => mCount(k) >= 3);
+    const milestones = [
+      ['First paid event by Dec 2026', wonIn('2000-01-01', '2026-12-31') >= 1],
+      ['2 events/month by Mar 2027',   mCount('2027-03') >= 2],
+      ['3 events/month, Jun–Aug 2027', summerOk],
+    ].map(([l, ok]) => `<div class="row between item"><span>${l}</span><span class="pill ${ok ? 'ok' : ''}">${ok ? 'On track ✓' : 'Not yet'}</span></div>`).join('');
+
+    const upcoming = db.pitches.filter(p => p.stage === 'booked' && p.eventDate >= t).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+    const todos = db.pitches.filter(postOpen);
+    const backupAge = db.settings.lastBackup ? daysBetween(db.settings.lastBackup, t) : null;
+
+    return `
+      ${backupAge === null || backupAge > 14 ? `<div class="card banner row between"><span class="small">${backupAge === null ? 'No backup yet.' : `Last backup ${backupAge} days ago.`} Your data only lives on this device.</span><button class="btn sm" onclick="exportJSON()">Back up now</button></div>` : ''}
+      <div class="grid kpis">
+        <div class="card kpi"><div class="l">This week</div><div class="v">${w.pitchedThisWeek.length}<span class="muted small"> / 1 pitch</span></div><span class="pill ${w.cls}">${w.status}</span></div>
+        <div class="card kpi"><div class="l">Conversion</div><div class="v">${s.conversion}%</div><div class="small muted">${s.won.length} won of ${s.pitched.length} pitched</div></div>
+        <div class="card kpi"><div class="l">Revenue booked</div><div class="v">${money(s.revenue)}</div><div class="small muted">${s.won.length} events (booked + done)</div></div>
+        <div class="card kpi"><div class="l">Pipeline value</div><div class="v">${money(s.pipeline)}</div><div class="small muted">${s.pipe.length} open pitches</div></div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <h2>Events per month vs target</h2>
+          <div class="small muted">By event date · <span style="color:var(--lime)">■</span> completed · <span style="color:var(--accent)">■</span> booked</div>
+          ${bars}
+          <div class="small muted" style="margin-top:6px">Edit targets in More → Targets.</div>
+        </div>
+        <div>
+          <div class="card"><h2>Goals</h2>${milestones}</div>
+          <div class="card"><h2>Upcoming events</h2>
+            ${upcoming.length ? upcoming.map(p => `<div class="item row between" onclick="openPitch('${p.id}')" style="cursor:pointer">
+              <span><b>${esc(acctName(p))}</b><br><span class="small muted">${OFFERS[p.offer]} · ${money(p.quotedPrice)}</span></span>
+              <span class="pill">${fmtDate(p.eventDate)}</span></div>`).join('') : '<div class="empty">No booked events yet.</div>'}
+          </div>
+          ${todos.length ? `<div class="card banner"><h2>After-event to-dos</h2><p class="small muted">${todos.length} job(s) waiting on a testimonial or photos.</p><button class="btn sm" onclick="go('week')">Open in Week</button></div>` : ''}
+        </div>
+      </div>`;
+  },
+
+  /* ---------- WEEK: Tuesday pitch + queue + follow-ups + post-event ---------- */
+  week() {
+    const w = weekInfo(), t = today();
+    const queue = db.pitches.filter(p => ['researched','identified'].includes(p.stage))
+      .sort((a, b) => (SIDX[b.stage] - SIDX[a.stage]) || a.createdAt.localeCompare(b.createdAt));
+    const follow = db.pitches.filter(p => PIPE_STAGES.includes(p.stage) && p.followUpDate && p.followUpDate <= addDays(t, 2))
+      .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+    const todos = db.pitches.filter(postOpen);
+    const activity = db.pitches.flatMap(p => (p.history || []).filter(h => h.date >= w.ws && h.date <= w.we).map(h => ({ p, h })))
+      .sort((a, b) => b.h.date.localeCompare(a.h.date));
+
+    return `
+      <div class="card">
+        <div class="row between"><h2>Week of ${fmtShort(w.ws)}</h2><span class="pill ${w.cls}">${w.status}</span></div>
+        <p class="small muted" style="margin:0 0 10px">Routine: one pitch every Tuesday. A pitch counts when its <b>pitch date</b> falls in this week.</p>
+        ${w.pitchedThisWeek.map(p => `<div class="small">✓ ${esc(acctName(p))} — ${OFFERS[p.offer]} (${fmtShort(p.pitchDate)})</div>`).join('')}
+        <div class="row" style="margin-top:10px"><button class="btn ghost sm" onclick="downloadICS()">📅 Add Tuesday reminder to my calendar</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Pitch queue <span class="muted small">(${queue.length})</span></h2>
+        <p class="small muted" style="margin:0 0 6px">Researched first, then oldest. Tap “Pitched” once it’s sent.</p>
+        ${queue.length ? queue.slice(0, 6).map(p => { const a = getAcct(p.accountId) || {}; return `
+          <div class="item row between">
+            <span onclick="openPitch('${p.id}')" style="cursor:pointer;flex:1"><b>${esc(a.name)}</b> <span class="tag">${esc(a.type || '')}</span><br>
+              <span class="small muted">${OFFERS[p.offer]} · <span class="stage s-${p.stage}">${stageLabel(p.stage)}</span>${a.contact ? ' · ' + esc(a.contact) : ''}</span></span>
+            <button class="mini" onclick="markPitched('${p.id}')">Pitched ✓</button>
+          </div>`; }).join('') + (queue.length > 6 ? `<div class="small muted item">+${queue.length - 6} more in Pipeline</div>` : '')
+          : '<div class="empty">Queue empty — add prospects with “+ Pitch”.</div>'}
+      </div>
+
+      <div class="card">
+        <h2>Follow-ups due <span class="muted small">(${follow.length})</span></h2>
+        ${follow.length ? follow.map(p => `
+          <div class="item row between">
+            <span onclick="openPitch('${p.id}')" style="cursor:pointer;flex:1"><b>${esc(acctName(p))}</b><br>
+              <span class="small ${p.followUpDate < t ? '' : 'muted'}" ${p.followUpDate < t ? 'style="color:var(--red)"' : ''}>Due ${fmtShort(p.followUpDate)} · ${stageLabel(p.stage)}</span></span>
+            <button class="mini" onclick="markFollowedUp('${p.id}')">Followed up</button>
+          </div>`).join('') : '<div class="empty">Nothing to chase in the next 2 days.</div>'}
+      </div>
+
+      <div class="card">
+        <h2>After-event to-dos <span class="muted small">(${todos.length})</span></h2>
+        ${todos.length ? todos.map(p => `
+          <div class="item row between">
+            <span style="flex:1"><b>${esc(acctName(p))}</b><br><span class="small muted">Event ${fmtShort(p.eventDate)} ·
+              Testimonial: ${POST_STATUS[p.post.testimonial]}${p.post.testimonial === 'requested' && p.post.requestedAt ? ` (${daysBetween(p.post.requestedAt, t)}d ago)` : ''} ·
+              Photos: ${POST_STATUS[p.post.photos]}</span></span>
+            <button class="mini" onclick="openPost('${p.id}')">Update</button>
+          </div>`).join('') : '<div class="empty">All caught up.</div>'}
+      </div>
+
+      <div class="card"><h2>This week’s activity</h2>
+        ${activity.length ? activity.map(({ p, h }) => `<div class="small item">${fmtShort(h.date)} · ${esc(acctName(p))} → <span class="stage s-${h.stage}">${stageLabel(h.stage)}</span></div>`).join('') : '<div class="empty">No moves yet this week.</div>'}
+      </div>`;
+  },
+
+  /* ---------- PIPELINE: filters + board/list ---------- */
+  pipeline() {
+    const f = ui.f;
+    return `
+      <div class="card">
+        <div class="filters">
+          <input class="full" placeholder="Search name, contact, notes…" value="${esc(f.q)}" oninput="ui.f.q=this.value;renderPipelineResults()">
+          <select onchange="ui.f.type=this.value;renderPipelineResults()"><option value="">All types</option>${opts(TYPES, f.type)}</select>
+          <select onchange="ui.f.stage=this.value;renderPipelineResults()"><option value="">All stages</option>${STAGES.map(s => `<option value="${s.id}" ${s.id === f.stage ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
+          <select onchange="ui.f.offer=this.value;renderPipelineResults()"><option value="">All offers</option>${optsKV(OFFERS, f.offer)}</select>
+          <select onchange="ui.f.dateField=this.value;renderPipelineResults()">
+            <option value="eventDate" ${f.dateField === 'eventDate' ? 'selected' : ''}>Event date</option>
+            <option value="pitchDate" ${f.dateField === 'pitchDate' ? 'selected' : ''}>Pitch date</option>
+            <option value="followUpDate" ${f.dateField === 'followUpDate' ? 'selected' : ''}>Follow-up date</option></select>
+          <div class="row" style="flex-wrap:nowrap"><input type="date" value="${f.from}" onchange="ui.f.from=this.value;renderPipelineResults()" aria-label="From"><input type="date" value="${f.to}" onchange="ui.f.to=this.value;renderPipelineResults()" aria-label="To"></div>
+        </div>
+        <div class="row between" style="margin-top:10px">
+          <div class="row">
+            <button class="mini" style="${ui.view === 'board' ? 'border-color:var(--accent);color:var(--accent)' : ''}" onclick="ui.view='board';renderPipelineResults();render()">Board</button>
+            <button class="mini" style="${ui.view === 'list' ? 'border-color:var(--accent);color:var(--accent)' : ''}" onclick="ui.view='list';renderPipelineResults();render()">List</button>
+          </div>
+          <button class="mini" onclick="ui.f={q:'',type:'',stage:'',offer:'',dateField:'eventDate',from:'',to:''};render()">Clear filters</button>
+        </div>
+      </div>
+      <div id="results"></div>`;
+  },
+
+  /* ---------- ACCOUNTS ---------- */
+  accounts() {
+    return `
+      <div class="card row" style="flex-wrap:nowrap">
+        <input placeholder="Search accounts…" value="${esc(ui.acctQ)}" oninput="ui.acctQ=this.value;renderAccountResults()">
+        <select style="max-width:42%" onchange="ui.acctType=this.value;renderAccountResults()"><option value="">All types</option>${opts(TYPES, ui.acctType)}</select>
+      </div>
+      <div class="row" style="margin-bottom:10px"><button class="btn sm" onclick="openAccountForm()">+ New account</button></div>
+      <div id="acctResults"></div>`;
+  },
+
+  /* ---------- MORE: rate card, targets, data ---------- */
+  more() {
+    const months = Object.keys(db.targets).sort();
+    return `
+      <div class="card">
+        <div class="row between"><h2>Rate card</h2><span class="pill warn">Draft</span></div>
+        <p class="small muted" style="margin:0 0 6px">Used to suggest quotes and estimate pipeline value (midpoint). Update after competitor checks.</p>
+        <div style="overflow-x:auto"><table class="rt">
+          <tr class="small muted"><th>Item</th><th>Unit</th><th>Low €</th><th>High €</th><th>Notes</th><th></th></tr>
+          ${db.rateCard.map((r, i) => `<tr>
+            <td><input value="${esc(r.name)}" onchange="db.rateCard[${i}].name=this.value;save()"></td>
+            <td><select onchange="db.rateCard[${i}].unit=this.value;save()">${opts(['per event','per head'], r.unit)}</select></td>
+            <td class="n"><input type="number" inputmode="decimal" value="${r.low}" onchange="db.rateCard[${i}].low=+this.value;save()"></td>
+            <td class="n"><input type="number" inputmode="decimal" value="${r.high}" onchange="db.rateCard[${i}].high=+this.value;save()"></td>
+            <td><input value="${esc(r.notes)}" onchange="db.rateCard[${i}].notes=this.value;save()"></td>
+            <td>${OFFERS[r.id] ? '' : `<button class="mini" onclick="db.rateCard.splice(${i},1);save();render()">✕</button>`}</td></tr>`).join('')}
+        </table></div>
+        <button class="mini" style="margin-top:8px" onclick="db.rateCard.push({id:uid(),name:'New add-on',unit:'per event',low:0,high:0,notes:''});save();render()">+ Add item</button>
+        <span class="small muted"> The three core offers can be renamed and repriced, not deleted.</span>
+      </div>
+
+      <div class="card">
+        <h2>Monthly event targets</h2>
+        <div class="fields">${months.map(k => `<div><label>${monthLabel(k)}</label><input type="number" min="0" inputmode="numeric" value="${db.targets[k]}" onchange="db.targets['${k}']=+this.value;save()"></div>`).join('')}</div>
+        <div class="row" style="margin-top:10px"><input type="month" id="newMonth" style="max-width:180px"><button class="mini" onclick="addTargetMonth()">+ Add month</button></div>
+        <label>Follow-up after pitching (days)</label>
+        <input type="number" min="1" style="max-width:120px" value="${db.settings.followUpDays}" onchange="db.settings.followUpDays=+this.value||5;save()">
+      </div>
+
+      <div class="card">
+        <h2>Data</h2>
+        <p class="small muted" style="margin:0 0 8px">Everything is stored only in this browser on this device. Last full backup: <b>${db.settings.lastBackup ? fmtDate(db.settings.lastBackup) : 'never'}</b>.</p>
+        <div class="row">
+          <button class="btn sm" onclick="exportJSON()">⬇ Full backup (.json)</button>
+          <label class="btn ghost sm" style="margin:0;color:var(--ink)">⬆ Restore backup<input type="file" accept=".json,application/json" hidden onchange="importJSON(this.files[0])"></label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn ghost sm" onclick="exportCSV('accounts')">Accounts CSV</button>
+          <button class="btn ghost sm" onclick="exportCSV('pitches')">Pitches CSV</button>
+          <label class="btn ghost sm" style="margin:0;color:var(--ink)">Import CSV<input type="file" accept=".csv,text/csv" hidden onchange="importCSV(this.files[0])"></label>
+        </div>
+        <p class="small muted">CSV import detects the file type from its header row. Use an exported CSV as the template. Rows with a matching <code>id</code> are updated; others are added. Pitch rows link by account name (missing accounts are created).</p>
+        <div class="row" style="margin-top:6px">
+          <button class="btn ghost sm" onclick="removeSample()">Remove sample data</button>
+          <button class="btn danger sm" onclick="resetAll()">Erase everything</button>
+        </div>
+      </div>
+      <p class="small muted" style="text-align:center">Signature Cocktails CRM · MVP v1 · data key <code>${STORAGE_KEY}</code></p>`;
+  },
+};
+
+/* ---------- Pipeline results (rendered separately so typing keeps focus) ---------- */
+function filteredPitches() {
+  const f = ui.f, q = f.q.trim().toLowerCase();
+  return db.pitches.filter(p => {
+    const a = getAcct(p.accountId) || {};
+    if (f.type && a.type !== f.type) return false;
+    if (f.stage && p.stage !== f.stage) return false;
+    if (f.offer && p.offer !== f.offer) return false;
+    const d = p[f.dateField];
+    if ((f.from || f.to) && !d) return false;
+    if (f.from && d < f.from) return false;
+    if (f.to && d > f.to) return false;
+    if (q && ![a.name, a.contact, a.area, a.notes, p.notes, a.email].join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function pitchCard(p) {
+  const a = getAcct(p.accountId) || {}, nx = nextStage(p);
+  return `<div class="pcard" onclick="openPitch('${p.id}')">
+    <div class="row between"><b>${esc(a.name || '(no account)')}</b><span class="tag">${esc(a.type || '')}</span></div>
+    <div class="pc-meta">${OFFERS[p.offer]}${p.offer === 'masterclass' && p.guests ? ` · ${p.guests} ppl` : ''}</div>
+    <div class="pc-meta">${money(pitchValue(p))}${+p.quotedPrice ? '' : ' est.'} · ${p.eventDate ? 'Event ' + fmtShort(p.eventDate) : 'No date'}</div>
+    ${p.stage === 'lost' && p.lostReason ? `<div class="pc-meta">✗ ${esc(p.lostReason)}</div>` : ''}
+    ${nx ? `<button class="mini" onclick="event.stopPropagation();advance('${p.id}')">→ ${stageLabel(nx)}</button>` : ''}
+  </div>`;
+}
+
+function renderPipelineResults() {
+  const el = $('#results'); if (!el) return;
+  const list = filteredPitches();
+  if (ui.view === 'board') {
+    el.innerHTML = `<div class="board">${STAGES.map(s => {
+      const items = list.filter(p => p.stage === s.id);
+      return `<div class="col"><h3><span class="stage s-${s.id}">${s.label}</span><span class="muted">${items.length}</span></h3>
+        ${items.map(pitchCard).join('') || '<div class="empty small">—</div>'}</div>`;
+    }).join('')}</div>`;
+  } else {
+    const sorted = list.slice().sort((a, b) => SIDX[a.stage] - SIDX[b.stage] || (a.eventDate || '9').localeCompare(b.eventDate || '9'));
+    el.innerHTML = `<div class="card">${sorted.length ? sorted.map(p => { const a = getAcct(p.accountId) || {}; return `
+      <div class="item row between" onclick="openPitch('${p.id}')" style="cursor:pointer">
+        <span style="flex:1"><b>${esc(a.name)}</b> <span class="tag">${esc(a.type || '')}</span><br>
+        <span class="small muted">${OFFERS[p.offer]} · ${money(pitchValue(p))}${+p.quotedPrice ? '' : ' est.'} · event ${fmtShort(p.eventDate)} · pitched ${fmtShort(p.pitchDate)}</span></span>
+        <span class="stage s-${p.stage}">${stageLabel(p.stage)}</span></div>`; }).join('') : '<div class="empty">No pitches match these filters.</div>'}</div>`;
+  }
+}
+
+function renderAccountResults() {
+  const el = $('#acctResults'); if (!el) return;
+  const q = ui.acctQ.trim().toLowerCase();
+  const list = db.accounts.filter(a => (!ui.acctType || a.type === ui.acctType) &&
+    (!q || [a.name, a.contact, a.area, a.email, a.notes, a.source].join(' ').toLowerCase().includes(q)))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  el.innerHTML = `<div class="card">${list.length ? list.map(a => {
+    const ps = db.pitches.filter(p => p.accountId === a.id);
+    const latest = ps.slice().sort((x, y) => (y.updatedAt || '').localeCompare(x.updatedAt || ''))[0];
+    return `<div class="item row between" onclick="openAccount('${a.id}')" style="cursor:pointer">
+      <span style="flex:1"><b>${esc(a.name)}</b> <span class="tag">${esc(a.type)}</span><br>
+      <span class="small muted">${esc(a.area || '—')} · ${esc(a.contact || 'no contact')}${a.role ? ', ' + esc(a.role) : ''} · ${ps.length} pitch${ps.length === 1 ? '' : 'es'}</span></span>
+      ${latest ? `<span class="stage s-${latest.stage}">${stageLabel(latest.stage)}</span>` : ''}</div>`;
+  }).join('') : '<div class="empty">No accounts found.</div>'}</div>`;
+}
+
+/* =====================================================================
+   FORMS / MODALS
+   ===================================================================== */
+const modal = $('#modal');
+function openModal(html) { $('#modalBody').innerHTML = html; if (!modal.open) modal.showModal(); $('#modalBody').scrollTop = 0; }
+function closeModal() { modal.close(); }
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); }); // tap backdrop to close
+const head = (title, sub = '') => `<div class="mhead"><div><h2>${title}</h2>${sub ? `<div class="small muted">${sub}</div>` : ''}</div><button class="x" type="button" onclick="closeModal()">×</button></div>`;
+
+/* ---------- Pitch form (create + edit) ---------- */
+function openPitch(id, presetAccountId) {
+  const p = id ? getPitch(id) : { offer:'bar', stage:'identified', accountId:presetAccountId || '', guests:'', quotedPrice:'', pitchDate:'', followUpDate:'', eventDate:'', notes:'', lostReason:'' };
+  const accts = db.accounts.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const r = rate(p.offer) || {};
+  openModal(`${head(id ? 'Edit pitch' : 'New pitch', id ? esc(acctName(p)) : '')}
+    <form onsubmit="savePitch(event)">
+      <input type="hidden" name="id" value="${id || ''}">
+      <label>Account</label>
+      <select name="accountId" onchange="document.getElementById('newAcct').hidden=this.value!=='__new'">
+        ${accts.length ? '' : '<option value="__new" selected>+ New account…</option>'}
+        ${accts.map(a => `<option value="${a.id}" ${a.id === p.accountId ? 'selected' : ''}>${esc(a.name)} (${esc(a.type)})</option>`).join('')}
+        ${accts.length ? '<option value="__new">+ New account…</option>' : ''}
+      </select>
+      <div id="newAcct" class="fields" ${accts.length ? 'hidden' : ''}>
+        <div><label>New account name</label><input name="newName"></div>
+        <div><label>Type</label><select name="newType">${opts(TYPES, 'Corporate')}</select></div>
+        <div class="full small muted" style="margin-top:4px">Add contact details later from Accounts.</div>
+      </div>
+      <div class="fields">
+        <div><label>Offer</label><select name="offer" onchange="pitchFormHint(this.form)">${optsKV(OFFERS, p.offer)}</select></div>
+        <div><label>Guests</label><input name="guests" type="number" min="0" inputmode="numeric" value="${p.guests}" oninput="pitchFormHint(this.form)"></div>
+        <div class="full"><label>Quoted price (€)</label>
+          <div class="row" style="flex-wrap:nowrap"><input name="quotedPrice" type="number" min="0" inputmode="decimal" value="${p.quotedPrice}">
+          <button type="button" class="mini" onclick="this.form.quotedPrice.value=suggestedPrice(this.form.offer.value,this.form.guests.value)">Use suggested</button></div>
+          <div class="small muted" id="rateHint">${rateHint(p.offer, p.guests)}</div></div>
+        <div class="full"><label>Stage</label><select name="stage" onchange="pitchFormHint(this.form)">${STAGES.map(s => `<option value="${s.id}" ${s.id === p.stage ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
+          <div class="small muted" id="stageHint">${STAGES[SIDX[p.stage]].hint}</div></div>
+        <div><label>Pitch date</label><input name="pitchDate" type="date" value="${p.pitchDate}"></div>
+        <div><label>Follow-up date</label><input name="followUpDate" type="date" value="${p.followUpDate}"></div>
+        <div class="full"><label>Event date</label><input name="eventDate" type="date" value="${p.eventDate}"></div>
+        <div class="full" id="lostWrap" ${p.stage === 'lost' ? '' : 'hidden'}><label>Why lost?</label><input name="lostReason" value="${esc(p.lostReason)}" placeholder="Price, date taken, no reply, chose competitor…"></div>
+        <div class="full"><label>Notes</label><textarea name="notes" placeholder="Angle used, objections, headcount, venue details…">${esc(p.notes)}</textarea></div>
+      </div>
+      ${id && p.history ? `<details style="margin-top:10px"><summary class="small muted">Stage history (${p.history.length})</summary>
+        ${p.history.map(h => `<div class="small">${fmtShort(h.date)} → ${stageLabel(h.stage)}</div>`).join('')}</details>` : ''}
+      <div class="actions">
+        <button class="btn">Save</button>
+        ${id && ['completed','testimonial'].includes(p.stage) ? `<button type="button" class="btn ghost" onclick="openPost('${id}')">Testimonial & photos</button>` : ''}
+        ${id ? `<button type="button" class="btn ghost" onclick="openAccount('${p.accountId}')">Account</button>
+                <button type="button" class="btn danger" onclick="deletePitch('${id}')">Delete</button>` : ''}
+      </div>
+    </form>`);
+}
+
+function rateHint(offer, guests) {
+  const r = rate(offer); if (!r) return '';
+  const g = +guests || 12;
+  return r.unit === 'per head'
+    ? `Rate card: ${money(r.low)}–${money(r.high)} per head × ${g} = ${money(r.low * g)}–${money(r.high * g)} (draft)`
+    : `Rate card: ${money(r.low)}–${money(r.high)} per event (draft)`;
+}
+function pitchFormHint(f) {
+  $('#rateHint').textContent = rateHint(f.offer.value, f.guests.value);
+  $('#stageHint').textContent = STAGES[SIDX[f.stage.value]].hint;
+  $('#lostWrap').hidden = f.stage.value !== 'lost';
+}
+
+function savePitch(e) {
+  e.preventDefault();
+  const v = Object.fromEntries(new FormData(e.target));
+  let accountId = v.accountId, newAcct = null;
+  if (accountId === '__new') {
+    if (!v.newName || !v.newName.trim()) { toast('Give the new account a name.'); return; }
+    newAcct = blankAccount({ name:v.newName.trim(), type:v.newType });  // only stored once the pitch validates
+    accountId = newAcct.id;
+  }
+  const existing = v.id ? getPitch(v.id) : null;
+  // Work on a copy so a rejected stage move doesn't half-save
+  const p = existing ? JSON.parse(JSON.stringify(existing))
+                     : { id:uid(), stage:'identified', history:[{ stage:'identified', date:today() }], post:null, createdAt:today() };
+  Object.assign(p, {
+    accountId, offer:v.offer,
+    guests: v.guests ? +v.guests : '', quotedPrice: v.quotedPrice ? +v.quotedPrice : '',
+    pitchDate:v.pitchDate, followUpDate:v.followUpDate, eventDate:v.eventDate,
+    notes:v.notes, lostReason: v.stage === 'lost' ? (v.lostReason || '') : (p.lostReason || ''), updatedAt:today(),
+  });
+  const justCompleted = v.stage === 'completed' && p.stage !== 'completed';
+  if (v.stage !== p.stage) {
+    const chk = canMove(p, v.stage);
+    if (!chk.ok) { toast(chk.reason); return; }
+    applyStage(p, v.stage);
+  }
+  if (newAcct) db.accounts.push(newAcct);
+  if (existing) Object.assign(existing, p); else db.pitches.push(p);
+  save(); render();
+  // Post-event workflow: completing a job opens the testimonial/photos checklist
+  if (justCompleted) { openPost(p.id); toast('Event completed 🎉 Ask for a testimonial + photos.'); }
+  else { closeModal(); toast('Saved'); }
+}
+
+function deletePitch(id) {
+  if (!confirm('Delete this pitch? This can’t be undone.')) return;
+  db.pitches = db.pitches.filter(p => p.id !== id); save(); closeModal(); render();
+}
+
+function markPitched(id) {
+  const p = getPitch(id);
+  applyStage(p, 'pitched'); p.pitchDate = today();
+  p.followUpDate = addDays(today(), +db.settings.followUpDays || 5);
+  save(); render(); toast(`Pitched ${acctName(p)} ✓ Follow-up set for ${fmtShort(p.followUpDate)}`);
+}
+function markFollowedUp(id) {
+  const p = getPitch(id);
+  if (p.stage === 'pitched') applyStage(p, 'followup');
+  else p.followUpDate = addDays(today(), +db.settings.followUpDays || 5);
+  save(); render(); toast(`Next follow-up ${fmtShort(p.followUpDate)}`);
+}
+
+/* ---------- Account form + detail ---------- */
+function blankAccount(o = {}) {
+  return { id:uid(), name:'', type:'Corporate', area:'', contact:'', role:'', email:'', phone:'', source:'', notes:'', createdAt:today(), ...o };
+}
+
+function openAccountForm(id) {
+  const a = id ? getAcct(id) : blankAccount();
+  openModal(`${head(id ? 'Edit account' : 'New account')}
+    <form onsubmit="saveAccount(event)">
+      <input type="hidden" name="id" value="${id || ''}">
+      <div class="fields">
+        <div class="full"><label>Company / venue / client name *</label><input name="name" required value="${esc(a.name)}"></div>
+        <div><label>Type</label><select name="type">${opts(TYPES, a.type)}</select></div>
+        <div><label>Location (area)</label><input name="area" list="areas" value="${esc(a.area)}"><datalist id="areas">${AREAS.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>
+        <div><label>Contact person</label><input name="contact" value="${esc(a.contact)}"></div>
+        <div><label>Role</label><input name="role" value="${esc(a.role)}"></div>
+        <div><label>Email</label><input name="email" type="email" inputmode="email" value="${esc(a.email)}"></div>
+        <div><label>Phone</label><input name="phone" type="tel" inputmode="tel" value="${esc(a.phone)}"></div>
+        <div class="full"><label>Source channel</label><select name="source"><option value="">—</option>${opts(SOURCES, a.source)}</select></div>
+        <div class="full"><label>Notes</label><textarea name="notes">${esc(a.notes)}</textarea></div>
+      </div>
+      <div class="actions"><button class="btn">Save</button>${id ? `<button type="button" class="btn danger" onclick="deleteAccount('${id}')">Delete</button>` : ''}</div>
+    </form>`);
+}
+
+function saveAccount(e) {
+  e.preventDefault();
+  const v = Object.fromEntries(new FormData(e.target));
+  const fields = ['name','type','area','contact','role','email','phone','source','notes'];
+  let a = v.id ? getAcct(v.id) : null;
+  if (!a) { a = blankAccount(); db.accounts.push(a); }
+  fields.forEach(k => a[k] = (v[k] || '').trim());
+  save(); render(); openAccount(a.id); toast('Account saved');
+}
+
+function deleteAccount(id) {
+  const n = db.pitches.filter(p => p.accountId === id).length;
+  if (!confirm(`Delete this account${n ? ` and its ${n} pitch(es)` : ''}?`)) return;
+  db.accounts = db.accounts.filter(a => a.id !== id);
+  db.pitches = db.pitches.filter(p => p.accountId !== id);
+  save(); closeModal(); render();
+}
+
+function openAccount(id) {
+  const a = getAcct(id); if (!a) return;
+  const ps = db.pitches.filter(p => p.accountId === id).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
+  openModal(`${head(esc(a.name), `<span class="tag">${esc(a.type)}</span> ${esc(a.area || '')}`)}
+    <dl class="info">
+      <dt>Contact</dt><dd>${esc(a.contact || '—')}${a.role ? ` · ${esc(a.role)}` : ''}</dd>
+      <dt>Email</dt><dd>${a.email ? `<a href="mailto:${esc(a.email)}">${esc(a.email)}</a>` : '—'}</dd>
+      <dt>Phone</dt><dd>${a.phone ? `<a href="tel:${esc(a.phone.replace(/\s/g, ''))}">${esc(a.phone)}</a>` : '—'}</dd>
+      <dt>Source</dt><dd>${esc(a.source || '—')}</dd>
+      <dt>Notes</dt><dd style="white-space:pre-wrap">${esc(a.notes || '—')}</dd>
+    </dl>
+    <h3 style="margin-top:14px">Pitches</h3>
+    ${ps.length ? ps.map(p => `<div class="item row between" onclick="openPitch('${p.id}')" style="cursor:pointer">
+      <span><b>${OFFERS[p.offer]}</b><br><span class="small muted">${money(pitchValue(p))} · event ${fmtShort(p.eventDate)}</span></span>
+      <span class="stage s-${p.stage}">${stageLabel(p.stage)}</span></div>`).join('') : '<div class="empty">No pitches yet.</div>'}
+    <div class="actions">
+      <button class="btn" onclick="openPitch(null,'${id}')">+ New pitch</button>
+      <button class="btn ghost" onclick="openAccountForm('${id}')">Edit</button>
+    </div>`);
+}
+
+/* ---------- Post-event workflow: testimonial + photos ---------- */
+function requestMessage(p) {
+  const a = getAcct(p.accountId) || {};
+  const first = (a.contact || '').split(' ')[0] || 'there';
+  return `Hi ${first},\n\nThanks again for having Signature Cocktails at your event — it was a pleasure to look after you and your guests.\n\n` +
+    `Would you mind sending me two or three lines about how it went? I'd love to share it (first name and event type only, unless you're happy for more).\n\n` +
+    `And if you or your guests took any photos or videos of the bar, I'd be really grateful if you could send a few over — WhatsApp or email both work.\n\nCheers,\nTim\nSignature Cocktails`;
+}
+
+function openPost(id) {
+  const p = getPitch(id), a = getAcct(p.accountId) || {};
+  p.post = { testimonial:'to-request', photos:'to-request', quote:'', photoLink:'', ...(p.post || {}) };
+  const msg = requestMessage(p);
+  const mailto = `mailto:${encodeURIComponent(a.email || '')}?subject=${encodeURIComponent('Thank you + a small favour')}&body=${encodeURIComponent(msg)}`;
+  openModal(`${head('After the event', `${esc(a.name)} · ${fmtDate(p.eventDate)}`)}
+    <p class="small muted">Ask within 48 hours while the night is fresh. Mark as <b>Requested</b> once sent; chase after 5 days.</p>
+    <div class="row"><a class="btn ghost sm" href="${mailto}" onclick="setTimeout(()=>quickPost('${id}','requested'),300)">✉ Email request</a>
+      <button type="button" class="btn ghost sm" onclick="copyRequest('${id}')">⧉ Copy message (WhatsApp)</button></div>
+    <form onsubmit="savePost(event,'${id}')">
+      <div class="fields">
+        <div><label>Testimonial</label><select name="testimonial">${optsKV(POST_STATUS, p.post.testimonial)}</select></div>
+        <div><label>Photos</label><select name="photos">${optsKV(POST_STATUS, p.post.photos)}</select></div>
+        <div class="full"><label>Testimonial text (paste it here)</label><textarea name="quote">${esc(p.post.quote)}</textarea></div>
+        <div class="full"><label>Where the photos are</label><input name="photoLink" value="${esc(p.post.photoLink)}" placeholder="Album link, WhatsApp chat, phone folder…"></div>
+      </div>
+      <div class="actions"><button class="btn">Save</button><button type="button" class="btn ghost" onclick="openPitch('${id}')">Back to pitch</button></div>
+    </form>`);
+}
+
+function quickPost(id, status) {
+  const p = getPitch(id);
+  if (p.post.testimonial === 'to-request') { p.post.testimonial = status; p.post.requestedAt = today(); }
+  if (p.post.photos === 'to-request') p.post.photos = status;
+  save(); render(); openPost(id);
+}
+
+function copyRequest(id) {
+  const text = requestMessage(getPitch(id));
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+    .then(() => { toast('Message copied — paste into WhatsApp'); quickPost(id, 'requested'); })
+    .catch(() => { prompt('Copy this message:', text); quickPost(id, 'requested'); });
+}
+
+function savePost(e, id) {
+  e.preventDefault();
+  const v = Object.fromEntries(new FormData(e.target));
+  const p = getPitch(id);
+  if (v.testimonial === 'requested' && p.post.testimonial !== 'requested') p.post.requestedAt = today();
+  Object.assign(p.post, { testimonial:v.testimonial, photos:v.photos, quote:v.quote, photoLink:v.photoLink });
+  // Testimonial in hand → close the job automatically
+  if (v.testimonial === 'received' && p.stage === 'completed') { applyStage(p, 'testimonial'); toast('Testimonial logged — job closed ✓'); }
+  else toast('Saved');
+  save(); closeModal(); render();
+}
+
+/* =====================================================================
+   CSV / BACKUP / CALENDAR
+   ===================================================================== */
+function download(name, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href:url, download:name });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const ACCT_COLS  = ['id','name','type','area','contact','role','email','phone','source','notes'];
+const PITCH_COLS = ['id','account','accountType','offer','guests','quotedPrice','stage','pitchDate','followUpDate','eventDate','testimonial','photos','lostReason','notes'];
+
+const csvCell = v => { const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+function exportCSV(kind) {
+  let rows;
+  if (kind === 'accounts') rows = [ACCT_COLS, ...db.accounts.map(a => ACCT_COLS.map(k => a[k]))];
+  else rows = [PITCH_COLS, ...db.pitches.map(p => { const a = getAcct(p.accountId) || {};
+    return [p.id, a.name, a.type, p.offer, p.guests, p.quotedPrice, p.stage, p.pitchDate, p.followUpDate, p.eventDate,
+            p.post ? p.post.testimonial : '', p.post ? p.post.photos : '', p.lostReason, p.notes]; })];
+  // BOM so Excel opens accented Maltese characters correctly
+  download(`signature-${kind}-${today()}.csv`, '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
+}
+
+// Small RFC-4180 CSV parser (handles quotes, commas and newlines inside quotes)
+function parseCSV(text) {
+  text = text.replace(/^\ufeff/, '');
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+    else if (c !== '\r') f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+
+const matchOffer = s => { s = (s || '').toLowerCase(); return s.includes('master') ? 'masterclass' : s.includes('host') ? 'host' : 'bar'; };
+// Accepts a stage id ("followup") or the start of its label ("Follow-up", "Testimonial")
+const matchStage = s => { s = (s || '').toLowerCase().trim(); if (!s) return 'identified';
+  const st = STAGES.find(x => x.id === s || x.label.toLowerCase().startsWith(s)); return st ? st.id : 'identified'; };
+const matchType  = s => TYPES.find(t => t.toLowerCase() === (s || '').toLowerCase().trim()) || 'Private client';
+
+function importCSV(file) {
+  if (!file) return;
+  file.text().then(text => {
+    const rows = parseCSV(text);
+    if (rows.length < 2) { toast('CSV looks empty.'); return; }
+    const hdr = rows[0].map(h => h.trim().toLowerCase());
+    const recs = rows.slice(1).map(r => Object.fromEntries(hdr.map((h, i) => [h, (r[i] || '').trim()])));
+    let added = 0, updated = 0;
+    if (hdr.includes('stage') || hdr.includes('offer')) {           // ---- pitches
+      recs.forEach(r => {
+        const name = r.account || r.name; if (!name) return;
+        let a = db.accounts.find(x => x.name.toLowerCase() === name.toLowerCase());
+        if (!a) { a = blankAccount({ name, type:matchType(r.accounttype) }); db.accounts.push(a); }
+        let p = r.id && getPitch(r.id);
+        const data = { accountId:a.id, offer:matchOffer(r.offer), guests:r.guests ? +r.guests : '', quotedPrice:r.quotedprice ? +r.quotedprice : '',
+          stage:matchStage(r.stage), pitchDate:r.pitchdate || '', followUpDate:r.followupdate || '', eventDate:r.eventdate || '',
+          lostReason:r.lostreason || '', notes:r.notes || '', updatedAt:today() };
+        if (r.testimonial || r.photos) data.post = { testimonial:r.testimonial || 'to-request', photos:r.photos || 'to-request', quote:'', photoLink:'' };
+        if (p) { Object.assign(p, data); updated++; }
+        else { db.pitches.push({ id:r.id || uid(), createdAt:today(), post:null, history:[{ stage:data.stage, date:today() }], ...data }); added++; }
+      });
+    } else if (hdr.includes('name')) {                               // ---- accounts
+      recs.forEach(r => {
+        if (!r.name) return;
+        const data = { name:r.name, type:matchType(r.type), area:r.area || '', contact:r.contact || '', role:r.role || '',
+          email:r.email || '', phone:r.phone || '', source:r.source || '', notes:r.notes || '' };
+        const a = (r.id && getAcct(r.id)) || db.accounts.find(x => x.name.toLowerCase() === r.name.toLowerCase());
+        if (a) { Object.assign(a, data); updated++; } else { db.accounts.push(blankAccount({ ...data, id:r.id || uid() })); added++; }
+      });
+    } else { toast('Unrecognised CSV — needs a "name" (accounts) or "stage"/"offer" (pitches) column.'); return; }
+    save(); render(); toast(`Imported: ${added} added, ${updated} updated`);
+  });
+}
+
+function exportJSON() {
+  db.settings.lastBackup = today(); save();
+  download(`signature-crm-backup-${today()}.json`, JSON.stringify(db, null, 2), 'application/json');
+  render();
+}
+function importJSON(file) {
+  if (!file) return;
+  file.text().then(t => {
+    try {
+      const d = JSON.parse(t);
+      if (!Array.isArray(d.accounts) || !Array.isArray(d.pitches)) throw new Error('bad file');
+      if (!confirm(`Replace all current data with this backup (${d.accounts.length} accounts, ${d.pitches.length} pitches)?`)) return;
+      db = { ...freshDb(false), ...d }; save(); render(); toast('Backup restored');
+    } catch (e) { toast('That file isn’t a valid CRM backup.'); }
+  });
+}
+
+function removeSample() {
+  const n = db.accounts.filter(a => a.sample).length;
+  if (!n) { toast('No sample data left.'); return; }
+  if (!confirm(`Remove the ${n} sample accounts and their pitches?`)) return;
+  db.accounts = db.accounts.filter(a => !a.sample);
+  db.pitches = db.pitches.filter(p => !p.sample);
+  save(); render(); toast('Sample data removed');
+}
+function resetAll() {
+  if (!confirm('Erase ALL accounts and pitches on this device? Export a backup first if unsure.')) return;
+  db = freshDb(false); save(); render(); toast('All data erased');
+}
+function addTargetMonth() {
+  const k = $('#newMonth').value; if (!k) return;
+  if (!(k in db.targets)) db.targets[k] = 0;
+  save(); render();
+}
+
+// Weekly recurring Tuesday 09:00 reminder (.ics) — opens in Apple/Google/Outlook calendar
+function downloadICS() {
+  const w = weekInfo();
+  const start = (today() <= w.tue ? w.tue : addDays(w.tue, 7)).replace(/-/g, '');
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const ics = [
+    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Signature Cocktails//CRM//EN','BEGIN:VEVENT',
+    `UID:tuesday-pitch-${uid()}@signature-cocktails`, `DTSTAMP:${stamp}`,
+    `DTSTART:${start}T090000`, 'DURATION:PT30M', 'RRULE:FREQ=WEEKLY;BYDAY=TU',
+    'SUMMARY:🍸 Tuesday pitch — Signature Cocktails',
+    'DESCRIPTION:Open the CRM → Week tab. Send one pitch from the queue and mark it Pitched.',
+    'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:Tuesday pitch','TRIGGER:-PT0M','END:VALARM',
+    'END:VEVENT','END:VCALENDAR'].join('\r\n');
+  download('tuesday-pitch-reminder.ics', ics, 'text/calendar');
+}
+
+/* =====================================================================
+   BOOT
+   ===================================================================== */
+function go(tab) { ui.tab = tab; render(); window.scrollTo(0, 0); }
+document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => go(b.dataset.tab)));
+save();   // persist sample data on first run
+render();
+</script>
+</body>
+</html>
