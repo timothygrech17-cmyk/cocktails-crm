@@ -259,7 +259,7 @@ function load() {
       return { ...base, ...d, settings: { ...base.settings, ...(d.settings || {}) } };
     }
   } catch (e) { console.warn('Load failed', e); }
-  return freshDb(true); // first run → show sample data
+  return freshDb(false); // first run → start empty
 }
 
 function save() {
@@ -1083,7 +1083,7 @@ function downloadICS() {
    ===================================================================== */
 function go(tab) { ui.tab = tab; render(); window.scrollTo(0, 0); }
 document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => go(b.dataset.tab)));
-save();   // persist sample data on first run
+save();   // persist empty db on first run
 render();
 </script>
 </body>
